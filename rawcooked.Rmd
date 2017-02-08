@@ -1,23 +1,26 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Raw OX-I Performance and Data Quality"
+output:
+  html_document: default
+  html_notebook: default
 ---
 
 What effect do raw ratio means and variability have on data quality?
 
 Test value and variance of raw 12C current, 14/12 ratio and 13/12 ratio vs normalized SD of standards. Also test against secondary standards? Separate by wheel and system.
 
-First, load libraries and get the data.
+### First, load libraries and get the data.
 
 ```{r}
 library(amstools)
+library(RODBC)
 library(tidyverse)
 ```
 
-# Get current, raw ratios, and normalized ratios for standards within a date range
+### Get current, raw ratios, and normalized ratios for standards within a date range
 
 ```{r}
-date <- "2016-01-01"
+date <- "2016-07-01"
 
 sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, le12c, he13_12, he14_12
           FROM snics_raw
@@ -36,7 +39,7 @@ res <- sqlQuery(con, sqlres)
 odbcClose(con)
 ```
 
-
+### summarize raw data by target
 ```{r}
 rawsum <- raw %>% mutate(he14_12 = he14_12*1E12, le12c = le12c*1E6) %>% group_by(tp_num) %>% summarise(le12c.m = mean(le12c),
                                                  le12c.s = sd(le12c),
@@ -51,14 +54,14 @@ data <- filter(data, fm_corr > 0.9, fm_corr < 1.2, sig_fm_corr < 0.005, he14_12.
 
 # a plotting function
 cplot <- function(data, x, y) {
-ggplot(data, aes_string(x, y, color = system)) + 
+ggplot(data, aes_string(x, y, color = "system")) + 
     geom_point() + 
     geom_smooth(method="lm") + 
     facet_grid(.~ system, scales = "free_x")
 }
 ```
 
-Overall variability of raw ratios and normalized standards by system.
+### Within sample variability of raw ratios and normalized standards by system.
 ```{r}
 data %>% group_by(system) %>% summarize(Fm = mean(fm_corr),
                                         Fm.sd = sd(fm_corr),
@@ -67,7 +70,8 @@ data %>% group_by(system) %>% summarize(Fm = mean(fm_corr),
                                         he1312 = mean(he13_12.m),
                                         he1312.sd = sd(he13_12.m),
                                         le12c = mean(le12c.m),
-                                        le12c.sd = sd(le12c.m))
+                                        le12c.sd = sd(le12c.m)) %>%
+  knitr::kable(digits = 4)
                                         
 
 ```
@@ -75,19 +79,18 @@ data %>% group_by(system) %>% summarize(Fm = mean(fm_corr),
 OK, now some quick plotting. First, any effect of raw ratios on precision of individual targets? Looks like nothing too obvious.
 
 ```{r}
-#cplot(data, "he14_12.m", "fm_corr")
-data %>% ggplot(aes(le12c.m, he14_12.m, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ . , scales = "free_y")
-data %>% ggplot(aes(le12c.m, he14_12.s, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ . , scales = "free_y")
-data %>% ggplot(aes(he13_12.m, he13_12.m, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he14_12.m, he14_12.s, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he14_12.m, fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he13_12.m, fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he14_12.s, fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he13_12.s, fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he14_12.m, sig_fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he13_12.m, sig_fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he14_12.s, sig_fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-data %>% ggplot(aes(he13_12.s, sig_fm_corr, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
+ggplot(data, aes(le12c.m, he14_12.m, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(le12c.m, he14_12.s, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ ., scales = "free_x")
+cplot(data, "he14_12.m", "he14_12.s")
+cplot(data, "he13_12.m", "he14_12.m")
+cplot(data, "he14_12.m", "fm_corr")
+cplot(data, "he13_12.m", "fm_corr")
+cplot(data, "he14_12.s", "fm_corr")
+cplot(data, "he13_12.s", "fm_corr")
+cplot(data, "he14_12.m", "sig_fm_corr")
+cplot(data, "he13_12.m", "sig_fm_corr")
+cplot(data, "he14_12.s", "sig_fm_corr")
+cplot(data, "he13_12.s", "sig_fm_corr")
 ```
 
 Summarize and plot by wheel. Summarizing is neccessary to get SD's by wheel, but I think this tends to blur relationships due to variability in graphite.
@@ -103,9 +106,21 @@ wheelsum <- data %>% group_by(wheel, system) %>% summarise(fm_corr.m = mean(fm_c
                                                  he14_12.s = sd(he14_12.m))
 
 wheelsum <- filter(wheelsum, fm_corr.sd < 0.01)
+wheelsum %>% group_by(system) %>% summarize(Fm = mean(fm_corr.m),
+                                        Fm.sd = mean(fm_corr.sd),
+                                        he1412 = mean(he14_12.me),
+                                        he1412.sd = mean(he14_12.s),
+                                        he1312 = mean(he13_12.me),
+                                        he1312.sd = mean(he13_12.s),
+                                        le12c = mean(le12c.me),
+                                        le12c.sd = sd(le12c.me)) %>%
+  knitr::kable(digits = 4)
+```
 
-wheelsum %>% ggplot(aes(he14_12.me, fm_corr.sd, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-wheelsum %>% ggplot(aes(he13_12.me, fm_corr.sd, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-wheelsum %>% ggplot(aes(he14_12.s, fm_corr.sd, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
-wheelsum %>% ggplot(aes(he13_12.s, fm_corr.sd, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(.~ system, scales = "free_x")
+```{r}
+cplot(wheelsum, "le12c.me", "fm_corr.sd")
+cplot(wheelsum, "he14_12.me", "fm_corr.sd")
+cplot(wheelsum, "he13_12.me", "fm_corr.sd")
+cplot(wheelsum, "he14_12.s", "fm_corr.sd")
+cplot(wheelsum, "he13_12.s", "fm_corr.sd")
 ```
