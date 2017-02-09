@@ -7,7 +7,9 @@ output:
 
 What effect do raw ratio means and variability have on data quality?
 
-Test value and variance of raw 12C current, 14/12 ratio and 13/12 ratio vs normalized SD of standards. Also test against secondary standards? Separate by wheel and system.
+Test value and variance of raw 12C current, 14/12 ratio and 13/12 ratio vs
+normalized SD of standards. Also test against secondary standards? Separate by
+wheel and system.
 
 ### First, load libraries and get the data.
 
@@ -17,21 +19,25 @@ library(RODBC)
 library(tidyverse)
 ```
 
-### Get current, raw ratios, and normalized ratios for standards within a date range
+### Get data
+
+Get current, raw ratios, and normalized ratios for standards within a date range
 
 ```{r}
 date <- "2016-07-01"
 
-sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, le12c, he13_12, he14_12
-          FROM snics_raw
-          WHERE sample_type = 'S'
-            AND runtime > '", date, "'
-            AND ok_calc = 1")
+sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, 
+	         le12c, he13_12, he14_12
+               FROM snics_raw
+               WHERE sample_type = 'S'
+		    AND runtime > '", date, "'
+		    AND ok_calc = 1")
 
-sqlres <- paste0("SELECT wheel, tp_num, runtime, sample_name, fm_corr, sig_fm_corr
-            FROM snics_results
-          WHERE sample_type = 'S'
-            AND runtime > '", date, "'")
+sqlres <- paste0("SELECT wheel, tp_num, runtime, sample_name, 
+		    fm_corr, sig_fm_corr
+                  FROM snics_results
+                  WHERE sample_type = 'S'
+		    AND runtime > '", date, "'")
           
 con <- conNOSAMS()
 raw <- sqlQuery(con, sql)
@@ -39,18 +45,26 @@ res <- sqlQuery(con, sqlres)
 odbcClose(con)
 ```
 
-### summarize raw data by target
+Summarize raw data by target
 ```{r}
-rawsum <- raw %>% mutate(he14_12 = he14_12*1E12, le12c = le12c*1E6) %>% group_by(tp_num) %>% summarise(le12c.m = mean(le12c),
-                                                 le12c.s = sd(le12c),
-                                                 he13_12.m = mean(he13_12),
-                                                 he13_12.s = sd(he13_12),
-                                                 he14_12.m = mean(he14_12),
-                                                 he14_12.s = sd(he14_12))
+rawsum <- raw %>% 
+	mutate(he14_12 = he14_12*1E12, 
+	       le12c = le12c*1E6) %>% 
+       group_by(tp_num) %>% 
+       summarise(le12c.m = mean(le12c),
+		 le12c.s = sd(le12c),
+		 he13_12.m = mean(he13_12),
+		 he13_12.s = sd(he13_12),
+		 he14_12.m = mean(he14_12),
+		 he14_12.s = sd(he14_12))
 
-data <- inner_join(res, rawsum, by = "tp_num") %>% mutate(system = substring(wheel, 1, 5), le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m))
+data <- inner_join(res, rawsum, by = "tp_num") %>% 
+	mutate(system = substring(wheel, 1, 5), 
+	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m))
+
 # remove flyers and oxII
-data <- filter(data, fm_corr > 0.9, fm_corr < 1.2, sig_fm_corr < 0.005, he14_12.s < 0.03, le12c.m < 150)
+data <- filter(data, fm_corr > 0.9, fm_corr < 1.2, 
+	       sig_fm_corr < 0.005, he14_12.s < 0.03, le12c.m < 150)
 
 # a plotting function
 cplot <- function(data, x, y) {
@@ -63,20 +77,21 @@ ggplot(data, aes_string(x, y, color = "system")) +
 
 ### Within sample variability of raw ratios and normalized standards by system.
 ```{r}
-data %>% group_by(system) %>% summarize(Fm = mean(fm_corr),
-                                        Fm.sd = sd(fm_corr),
-                                        he1412 = mean(he14_12.m),
-                                        he1412.sd = sd(he14_12.m),
-                                        he1312 = mean(he13_12.m),
-                                        he1312.sd = sd(he13_12.m),
-                                        le12c = mean(le12c.m),
-                                        le12c.sd = sd(le12c.m)) %>%
-  knitr::kable(digits = 4)
-                                        
+data %>% group_by(system) %>% 
+	summarize(Fm = mean(fm_corr),
+		  Fm.sd = sd(fm_corr),
+		  he1412 = mean(he14_12.m),
+		  he1412.sd = sd(he14_12.m),
+		  he1312 = mean(he13_12.m),
+		  he1312.sd = sd(he13_12.m),
+		  le12c = mean(le12c.m),
+		  le12c.sd = sd(le12c.m)) %>%
+	knitr::kable(digits = 4)
 
 ```
 
-OK, now some quick plotting. First, any effect of raw ratios on precision of individual targets? Looks like nothing too obvious.
+OK, now some quick plotting. First, any effect of raw ratios on precision of
+individual targets? Looks like nothing too obvious.
 
 ```{r}
 ggplot(data, aes(le12c.m, he14_12.m, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ ., scales = "free_y")
@@ -93,29 +108,36 @@ cplot(data, "he14_12.s", "sig_fm_corr")
 cplot(data, "he13_12.s", "sig_fm_corr")
 ```
 
-Summarize and plot by wheel. Summarizing is neccessary to get SD's by wheel, but I think this tends to blur relationships due to variability in graphite.
+### Summarize and plot by wheel 
+
+Summarizing is neccessary to get SD's by wheel, but I think this tends to blur
+relationships due to variability in graphite.
 
 ```{r}
-wheelsum <- data %>% group_by(wheel, system) %>% summarise(fm_corr.m = mean(fm_corr),
-                                                   fm_corr.sd = sd(fm_corr),
-                                                   le12c.me = mean(le12c.m),
-                                                 le12c.s = sd(le12c.m),
-                                                 he13_12.me = mean(he13_12.m),
-                                                 he13_12.s = sd(he13_12.m),
-                                                 he14_12.me = mean(he14_12.m),
-                                                 he14_12.s = sd(he14_12.m))
+wheelsum <- data %>% group_by(wheel, system) %>% 
+	summarise(fm_corr.m = mean(fm_corr),
+		  fm_corr.sd = sd(fm_corr),
+		  le12c.me = mean(le12c.m),
+		  le12c.s = sd(le12c.m),
+		  he13_12.me = mean(he13_12.m),
+		  he13_12.s = sd(he13_12.m),
+		  he14_12.me = mean(he14_12.m),
+		  he14_12.s = sd(he14_12.m))
 
 wheelsum <- filter(wheelsum, fm_corr.sd < 0.01)
-wheelsum %>% group_by(system) %>% summarize(Fm = mean(fm_corr.m),
-                                        Fm.sd = mean(fm_corr.sd),
-                                        he1412 = mean(he14_12.me),
-                                        he1412.sd = mean(he14_12.s),
-                                        he1312 = mean(he13_12.me),
-                                        he1312.sd = mean(he13_12.s),
-                                        le12c = mean(le12c.me),
-                                        le12c.sd = sd(le12c.me)) %>%
-  knitr::kable(digits = 4)
+wheelsum %>% group_by(system) %>% 
+	summarize(Fm = mean(fm_corr.m),
+		  Fm.sd = mean(fm_corr.sd),
+		  he1412 = mean(he14_12.me),
+		  he1412.sd = mean(he14_12.s),
+		  he1312 = mean(he13_12.me),
+		  he1312.sd = mean(he13_12.s),
+		  le12c = mean(le12c.me),
+		  le12c.sd = sd(le12c.me)) %>%
+	knitr::kable(digits = 4)
 ```
+
+plots of raw data effect on sd of standards by wheel
 
 ```{r}
 cplot(wheelsum, "le12c.me", "fm_corr.sd")
