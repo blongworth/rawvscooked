@@ -1,25 +1,26 @@
 ---
 title: "Raw OX-I Performance and Data Quality"
 output:
-  html_document: default
+  pdf_document: default
   html_notebook: default
+  html_document: default
 ---
 
 What effect do raw ratio means and variability have on data quality?
 
 Test value and variance of raw 12C current, 14/12 ratio and 13/12 ratio vs
-normalized SD of standards. Also test against secondary standards? Separate by
-wheel and system.
+normalized SD of standards. First section looks at within-target variance. 
+Second section looks at the variability of standards within a wheel.
 
-### First, load libraries and get the data.
+## Get and process data
 
 ```{r}
-library(amstools)
+suppressMessages(library(amstools))
 library(RODBC)
-library(tidyverse)
+suppressMessages(library(tidyverse))
+theme_set(theme_bw())
 ```
 
-### Get data
 
 Get current, raw ratios, and normalized ratios for standards within a date range
 
@@ -33,9 +34,10 @@ sql <- paste0("SELECT wheel, runtime, tp_num, sample_name,
 		    AND runtime > '", date, "'
 		    AND ok_calc = 1")
 
-sqlres <- paste0("SELECT wheel, tp_num, runtime, sample_name, 
+sqlres <- paste0("SELECT wheel, target.tp_num, osg_num, runtime, sample_name, 
 		    fm_corr, sig_fm_corr
                   FROM snics_results
+                  JOIN target ON target.tp_num = snics_results.tp_num
                   WHERE sample_type = 'S'
 		    AND runtime > '", date, "'")
           
@@ -45,7 +47,8 @@ res <- sqlQuery(con, sqlres)
 odbcClose(con)
 ```
 
-Summarize raw data by target
+Summarize raw data by target.
+
 ```{r}
 rawsum <- raw %>% 
 	mutate(he14_12 = he14_12*1E12, 
@@ -64,7 +67,8 @@ data <- inner_join(res, rawsum, by = "tp_num") %>%
 
 # remove flyers and oxII
 data <- filter(data, fm_corr > 0.9, fm_corr < 1.2, 
-	       sig_fm_corr < 0.005, he14_12.s < 0.03, le12c.m < 150)
+	       sig_fm_corr < 0.005, he14_12.s < 0.03, le12c.m < 150,
+	       osg_num > 151250)
 
 # a plotting function
 cplot <- function(data, x, y) {
@@ -75,7 +79,10 @@ ggplot(data, aes_string(x, y, color = "system")) +
 }
 ```
 
-### Within sample variability of raw ratios and normalized standards by system.
+## Within target variability 
+
+Examine means and variability of raw ratios and normalized standards by
+target and separate by system.
 ```{r}
 data %>% group_by(system) %>% 
 	summarize(Fm = mean(fm_corr),
@@ -90,32 +97,66 @@ data %>% group_by(system) %>%
 
 ```
 
-OK, now some quick plotting. First, any effect of raw ratios on precision of
-individual targets? Looks like nothing too obvious.
+### Plots of raw ratios and within-target variance by OSG number.
 
 ```{r}
-ggplot(data, aes(le12c.m, he14_12.m, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(le12c.m, he14_12.s, color = system)) + geom_point() + geom_smooth(method="lm") + facet_grid(system ~ ., scales = "free_x")
-cplot(data, "he14_12.m", "he14_12.s")
-cplot(data, "he13_12.m", "he14_12.m")
-cplot(data, "he14_12.m", "fm_corr")
-cplot(data, "he13_12.m", "fm_corr")
-cplot(data, "he14_12.s", "fm_corr")
-cplot(data, "he13_12.s", "fm_corr")
-cplot(data, "he14_12.m", "sig_fm_corr")
-cplot(data, "he13_12.m", "sig_fm_corr")
-cplot(data, "he14_12.s", "sig_fm_corr")
-cplot(data, "he13_12.s", "sig_fm_corr")
+ggplot(data, aes(osg_num, he13_12.m, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(osg_num, he13_12.s, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(osg_num, he14_12.m, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(osg_num, he14_12.s, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(osg_num, fm_corr, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(osg_num, fm_corr.s, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
 ```
 
-### Summarize and plot by wheel 
+### Raw ratio mean and sd vs normalized fm
+
+Raw data and within target variabilty vs normalized fm and
+standard deviation of fm. First, any effect of raw ratios on 
+precision of individual targets? Looks like nothing too obvious.
+
+Note that fits of a "ball" of data are pretty unreliable.
+
+```{r}
+ggplot(data, aes(le12c.m, he14_12.m, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(le12c.m, he14_12.s, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_x")
+ggplot(data, aes(le12c.m, fm_corr, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(le12c.m, sig_fm_corr, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_x")
+cplot(data, "he13_12.m", "he14_12.m")
+cplot(data, "he13_12.m", "he14_12.s")
+cplot(data, "he13_12.m", "fm_corr")
+cplot(data, "he13_12.m", "sig_fm_corr")
+cplot(data, "he13_12.s", "fm_corr")
+cplot(data, "he13_12.s", "sig_fm_corr")
+cplot(data, "he14_12.m", "he14_12.s")
+cplot(data, "he14_12.m", "fm_corr")
+cplot(data, "he14_12.m", "sig_fm_corr")
+cplot(data, "he14_12.s", "fm_corr")
+cplot(data, "he14_12.s", "sig_fm_corr")
+```
+
+## Summarize and plot by wheel 
 
 Summarizing is neccessary to get SD's by wheel, but I think this tends to blur
 relationships due to variability in graphite.
 
 ```{r}
 wheelsum <- data %>% group_by(wheel, system) %>% 
-	summarise(fm_corr.m = mean(fm_corr),
+	summarise(date = mean(as.Date(runtime)),
+	          fm_corr.m = mean(fm_corr),
 		  fm_corr.sd = sd(fm_corr),
 		  le12c.me = mean(le12c.m),
 		  le12c.s = sd(le12c.m),
@@ -136,6 +177,25 @@ wheelsum %>% group_by(system) %>%
 		  le12c.sd = sd(le12c.me)) %>%
 	knitr::kable(digits = 4)
 ```
+
+### Plots by date
+
+```{r}
+ggplot(wheelsum, aes(date, he13_12.me, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(wheelsum, aes(date, he13_12.s, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(wheelsum, aes(date, he14_12.me, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(wheelsum, aes(date, he14_12.s, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(wheelsum, aes(date, fm_corr.m, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(wheelsum, aes(date, fm_corr.sd, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+```
+
+### Plots of raw data vs corrected fm by wheel
 
 plots of raw data effect on sd of standards by wheel
 
