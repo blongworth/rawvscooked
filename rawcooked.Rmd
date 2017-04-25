@@ -110,8 +110,6 @@ ggplot(data, aes(osg_num, he14_12.s, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
 ggplot(data, aes(osg_num, fm_corr, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(osg_num, fm_corr.s, color = system)) +
-  geom_point() + facet_grid(system ~ ., scales = "free_y")
 ```
 
 ### Raw ratio mean and sd vs normalized fm
