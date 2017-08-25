@@ -1,9 +1,9 @@
 ---
 title: "Raw OX-I Performance and Data Quality"
 output:
-  pdf_document: default
-  html_notebook: default
   html_document: default
+  html_notebook: default
+  pdf_document: default
 ---
 
 What effect do raw ratio means and variability have on data quality?
@@ -34,10 +34,11 @@ sql <- paste0("SELECT wheel, runtime, tp_num, sample_name,
 		    AND runtime > '", date, "'
 		    AND ok_calc = 1")
 
-sqlres <- paste0("SELECT wheel, target.tp_num, osg_num, runtime, sample_name, 
+sqlres <- paste0("SELECT wheel, target.tp_num, target.osg_num, runtime, gf_date, sample_name, 
 		    fm_corr, sig_fm_corr
                   FROM snics_results
                   JOIN target ON target.tp_num = snics_results.tp_num
+                  JOIN graphite ON graphite.osg_num = target.osg_num
                   WHERE sample_type = 'S'
 		    AND runtime > '", date, "'")
           
@@ -62,8 +63,10 @@ rawsum <- raw %>%
 		 he14_12.s = sd(he14_12))
 
 data <- inner_join(res, rawsum, by = "tp_num") %>% 
-	mutate(system = substring(wheel, 1, 5), 
-	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m))
+	mutate(system = toupper(substring(wheel, 1, 5)), 
+	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m),
+	       rt = as.POSIXct(runtime),
+	       age = gf_date - rt)
 
 # remove flyers and oxII
 data <- filter(data, fm_corr > 0.9, fm_corr < 1.2, 
@@ -112,6 +115,18 @@ ggplot(data, aes(osg_num, fm_corr, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
 ```
 
+```{r}
+ggplot(data, aes(age, he13_12.m, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(age, he14_12.m, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(age, fm_corr, color = system)) +
+  geom_point() + geom_smooth(method="lm") +
+  facet_grid(system ~ ., scales = "free_y")
+```
+
 ### Raw ratio mean and sd vs normalized fm
 
 Raw data and within target variabilty vs normalized fm and
@@ -134,6 +149,8 @@ ggplot(data, aes(le12c.m, sig_fm_corr, color = system)) +
   geom_point() + geom_smooth(method="lm") +
   facet_grid(system ~ ., scales = "free_x")
 cplot(data, "he13_12.m", "he14_12.m")
+ggplot(data, aes(he13_12.m, he14_12.m, color = system)) +
+  geom_point() + geom_smooth(method="lm") 
 cplot(data, "he13_12.m", "he14_12.s")
 cplot(data, "he13_12.m", "fm_corr")
 cplot(data, "he13_12.m", "sig_fm_corr")
@@ -198,9 +215,16 @@ ggplot(wheelsum, aes(date, fm_corr.sd, color = system)) +
 plots of raw data effect on sd of standards by wheel
 
 ```{r}
-cplot(wheelsum, "le12c.me", "fm_corr.sd")
-cplot(wheelsum, "he14_12.me", "fm_corr.sd")
-cplot(wheelsum, "he13_12.me", "fm_corr.sd")
-cplot(wheelsum, "he14_12.s", "fm_corr.sd")
-cplot(wheelsum, "he13_12.s", "fm_corr.sd")
+
+# a plotting function
+cplotns <- function(data, x, y) {
+ggplot(data, aes_string(x, y, color = "system")) + 
+    geom_point() + 
+    facet_grid(.~ system, scales = "free_x")
+}
+cplotns(wheelsum, "le12c.me", "fm_corr.sd")
+cplotns(wheelsum, "he14_12.me", "fm_corr.sd")
+cplotns(wheelsum, "he13_12.me", "fm_corr.sd")
+cplotns(wheelsum, "he14_12.s", "fm_corr.sd")
+cplotns(wheelsum, "he13_12.s", "fm_corr.sd")
 ```
