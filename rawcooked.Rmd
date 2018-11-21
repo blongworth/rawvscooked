@@ -16,7 +16,7 @@ Second section looks at the variability of standards within a wheel.
 
 ```{r}
 suppressMessages(library(amstools))
-library(RODBC)
+library(odbc)
 suppressMessages(library(tidyverse))
 theme_set(theme_bw())
 ```
@@ -25,7 +25,7 @@ theme_set(theme_bw())
 Get current, raw ratios, and normalized ratios for standards within a date range
 
 ```{r}
-date <- "2016-07-01"
+date <- "2018-10-01"
 
 sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, 
 	         le12c, he13_12, he14_12
@@ -43,9 +43,8 @@ sqlres <- paste0("SELECT wheel, target.tp_num, target.osg_num, runtime, gf_date,
 		    AND runtime > '", date, "'")
           
 con <- conNOSAMS()
-raw <- sqlQuery(con, sql)
-res <- sqlQuery(con, sqlres)
-odbcClose(con)
+raw <- dbGetQuery(con, sql)
+res <- dbGetQuery(con, sqlres)
 ```
 
 Summarize raw data by target.
@@ -112,6 +111,8 @@ ggplot(data, aes(osg_num, he14_12.m, color = system)) +
 ggplot(data, aes(osg_num, he14_12.s, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
 ggplot(data, aes(osg_num, fm_corr, color = system)) +
+  geom_point() + facet_grid(system ~ ., scales = "free_y")
+ggplot(data, aes(rt, he14_12.m, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
 ```
 
