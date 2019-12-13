@@ -19,13 +19,21 @@ suppressMessages(library(amstools))
 library(odbc)
 suppressMessages(library(tidyverse))
 theme_set(theme_bw())
+
+# a plotting function
+cplot <- function(data, x, y) {
+ggplot(data, aes_string(x, y, color = "system")) + 
+    geom_point() + 
+    geom_smooth(method="lm") + 
+    facet_grid(.~ system, scales = "free_x")
+}
 ```
 
 
 Get current, raw ratios, and normalized ratios for standards within a date range
 
 ```{r}
-date <- "2018-10-01"
+date <- "2019-05-01"
 
 sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, 
 	         le12c, he13_12, he14_12
@@ -70,16 +78,10 @@ data <- inner_join(res, rawsum, by = "tp_num") %>%
 # remove flyers and oxII
 data <- filter(data, fm_corr > 0.9, fm_corr < 1.2, 
 	       sig_fm_corr < 0.005, he14_12.s < 0.03, le12c.m < 150,
-	       osg_num > 151250)
-
-# a plotting function
-cplot <- function(data, x, y) {
-ggplot(data, aes_string(x, y, color = "system")) + 
-    geom_point() + 
-    geom_smooth(method="lm") + 
-    facet_grid(.~ system, scales = "free_x")
-}
+	       osg_num > 151250,
+	       he13_12.m > 0.9)
 ```
+
 
 ## Within target variability 
 
@@ -102,17 +104,15 @@ data %>% group_by(system) %>%
 ### Plots of raw ratios and within-target variance by OSG number.
 
 ```{r}
-ggplot(data, aes(osg_num, he13_12.m, color = system)) +
+ggplot(data, aes(gf_date, he13_12.m, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(osg_num, he13_12.s, color = system)) +
+ggplot(data, aes(gf_date, he13_12.s, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(osg_num, he14_12.m, color = system)) +
+ggplot(data, aes(gf_date, he14_12.m, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(osg_num, he14_12.s, color = system)) +
+ggplot(data, aes(gf_date, he14_12.s, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(osg_num, fm_corr, color = system)) +
-  geom_point() + facet_grid(system ~ ., scales = "free_y")
-ggplot(data, aes(rt, he14_12.m, color = system)) +
+ggplot(data, aes(gf_date, fm_corr, color = system)) +
   geom_point() + facet_grid(system ~ ., scales = "free_y")
 ```
 
@@ -162,6 +162,19 @@ cplot(data, "he14_12.m", "fm_corr")
 cplot(data, "he14_12.m", "sig_fm_corr")
 cplot(data, "he14_12.s", "fm_corr")
 cplot(data, "he14_12.s", "sig_fm_corr")
+```
+
+Slope and intercept of 14/12 vs 13/12 for CFAMS and USAMS
+
+```{r}
+
+data %>% 
+    group_by(system) %>% 
+    do({
+      mod = lm(he14_12.m ~ he13_12.m, data = .)
+      data.frame(Intercept = coef(mod)[1],
+                 Slope = coef(mod)[2])
+    })
 ```
 
 ## Summarize and plot by wheel 
