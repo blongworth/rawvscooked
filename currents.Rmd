@@ -1,0 +1,74 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library(amstools))
+library(odbc)
+suppressMessages(library(tidyverse))
+theme_set(theme_bw())
+```
+
+
+Get current, raw ratios, and normalized ratios for standards within a date range
+
+```{r}
+sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, 
+	         le12c, he13_12, he14_12
+               FROM snics_raw
+               WHERE sample_type = 'S'
+	      AND ok_calc = 1")
+
+con <- conNOSAMS()
+raw <- dbGetQuery(con, sql)
+
+rawsum <- raw %>% 
+       group_by(tp_num, wheel) %>% 
+          summarize(runtime = first(runtime),
+                    le12c.m = mean(le12c) * -1E6,
+            		 le12c.s = sd(le12c),
+            		 he13_12.m = mean(he13_12),
+            		 he13_12.s = sd(he13_12),
+            		 he14_12.m = mean(he14_12*1E12),
+            		 he14_12.s = sd(he14_12)) %>%
+   filter(he14_12.m > 0.9,
+         he14_12.m < 1.4,
+         le12c.m > -160) %>%
+	mutate(system = toupper(substring(wheel, 1, 5)), 
+	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m),
+	       rt = as.POSIXct(runtime))
+
+wheelsum <- raw %>%
+       group_by(wheel) %>% 
+          summarize(runtime = first(runtime),
+                    le12c.m = mean(le12c) * -1E6,
+            		 le12c.s = sd(le12c),
+            		 he13_12.m = mean(he13_12),
+            		 he13_12.s = sd(he13_12),
+            		 he14_12.m = mean(he14_12*1E12),
+            		 he14_12.s = sd(he14_12)) %>%
+   filter(he14_12.m > 0.9,
+         he14_12.m < 1.4,
+         le12c.m > -160) %>%
+	mutate(system = toupper(substring(wheel, 1, 5)), 
+	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m),
+	       rt = as.POSIXct(runtime))
+
+
+```
+
+```{r}
+
+ggplot(rawsum, aes(rt, le12c.m, color = system)) +
+  geom_point() + facet_grid(system ~ .) +
+  scale_y_reverse()
+ggplot(wheelsum, aes(rt, le12c.m, color = system)) +
+  geom_point() + facet_grid(system ~ .) +
+  scale_y_reverse()
+```
+
