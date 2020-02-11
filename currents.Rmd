@@ -19,7 +19,7 @@ Get current, raw ratios, and normalized ratios for standards within a date range
 
 ```{r}
 sql <- paste0("SELECT wheel, runtime, tp_num, sample_name, 
-	         le12c, he13_12, he14_12
+	         le12c, he12c, he13_12, he14_12
                FROM snics_raw
                WHERE sample_type = 'S'
 	      AND ok_calc = 1")
@@ -31,6 +31,7 @@ rawsum <- raw %>%
        group_by(tp_num, wheel) %>% 
           summarize(runtime = first(runtime),
                     le12c.m = mean(le12c) * -1E6,
+                    he12c.m = mean(he12c) * -1E6,
             		 le12c.s = sd(le12c),
             		 he13_12.m = mean(he13_12),
             		 he13_12.s = sd(he13_12),
@@ -41,12 +42,14 @@ rawsum <- raw %>%
          le12c.m > -160) %>%
 	mutate(system = toupper(substring(wheel, 1, 5)), 
 	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m),
+	       he12c.m = ifelse(system == "USAMS", he12c.m/3, le12c.m),
 	       rt = as.POSIXct(runtime))
 
 wheelsum <- raw %>%
        group_by(wheel) %>% 
           summarize(runtime = first(runtime),
                     le12c.m = mean(le12c) * -1E6,
+                    he12c.m = mean(he12c) * -1E6,
             		 le12c.s = sd(le12c),
             		 he13_12.m = mean(he13_12),
             		 he13_12.s = sd(he13_12),
@@ -57,6 +60,7 @@ wheelsum <- raw %>%
          le12c.m > -160) %>%
 	mutate(system = toupper(substring(wheel, 1, 5)), 
 	       le12c.m = ifelse(system == "USAMS", -le12c.m, le12c.m),
+	       he12c.m = ifelse(system == "USAMS", he12c.m/3, le12c.m),
 	       rt = as.POSIXct(runtime))
 
 
@@ -67,7 +71,13 @@ wheelsum <- raw %>%
 ggplot(rawsum, aes(rt, le12c.m, color = system)) +
   geom_point() + facet_grid(system ~ .) +
   scale_y_reverse()
+ggplot(rawsum, aes(rt, he12c.m, color = system)) +
+  geom_point() + facet_grid(system ~ .) +
+  scale_y_reverse()
 ggplot(wheelsum, aes(rt, le12c.m, color = system)) +
+  geom_point() + facet_grid(system ~ .) +
+  scale_y_reverse()
+ggplot(wheelsum, aes(rt, he12c.m, color = system)) +
   geom_point() + facet_grid(system ~ .) +
   scale_y_reverse()
 ```
